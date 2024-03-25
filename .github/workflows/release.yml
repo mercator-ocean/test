@@ -47,7 +47,8 @@ jobs:
         env:
           TAG: ${{ steps.tag_version.outputs.new_tag }}
         run: |
-          VERSION=${TAG#v} 
+          VERSION=${TAG#v}
+          touch ${VERSION}.txt
           echo $VERSION
 
       - name: Create Pull Request
