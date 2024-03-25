@@ -1,16 +1,6 @@
 name: Release
 
-on:
-  workflow_dispatch:
-    inputs:
-      bump_type:
-        description: 'Type of bump to use'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+on: push
 
 jobs:
   release:
@@ -32,59 +22,19 @@ jobs:
           condarc-file: .condarc
           cache-environment: true
           post-cleanup: 'all'
-
-      - name: Get bumped version
-        id: tag_version
-        uses: anothrNick/github-tag-action@1.67.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BUMP: ${{ inputs.bump_type }}
-          WITH_V: true
-          DRY_RUN: true
-      
-      - name: Bump poetry version
+          
+      - name: Set VERSION environment variable
+        id: version
         shell: micromamba-shell {0}
-        env:
-          TAG: ${{ steps.tag_version.outputs.new_tag }}
-        run: |
-          VERSION=${TAG#v}
-          touch ${VERSION}.txt
-          echo $VERSION
-
-      - name: Create Pull Request
-        id: create_pull_request
-        uses: peter-evans/create-pull-request@v6.0.2
-        env:
-          HOME: ""
+        run: echo "VERSION=1.0.11" >> $GITHUB_OUTPUT
+  
+      - name: Wait for Pypi version to be available
+        uses: cygnetdigital/wait_for_response@v2.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: Release ${{ steps.tag_version.outputs.new_tag }}
-      
-      - name: Approve Pull Request
-        uses: juliangruber/approve-pull-request-action@v2.0.6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          number: ${{ steps.create_pull_request.outputs.pull-request-number }}
-      
-      - name: Merge Pull Request
-        uses: juliangruber/merge-pull-request-action@v1.3.1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          number: ${{ steps.create_pull_request.outputs.pull-request-number }}
-          method: squash 
-
-      - name: Create a GitHub release
-        uses: ncipollo/release-action@v1.14.0
-        with:
-          tag: ${{ steps.tag_version.outputs.new_tag }}
-          name: Release ${{ steps.tag_version.outputs.new_tag }}
-          generateReleaseNotes: true
-
-      - name: Create release
-        env:
-          TAG: ${{ steps.tag_version.outputs.new_tag }}
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_PUSH_TOKEN: ${{ secrets.DOCKER_HUB_PUSH_TOKEN }}
-        run: VERSION=${TAG#v} make release
-        shell: micromamba-shell {0}
+          url: 'https://pypi.org/project/copernicusmarine/${{ steps.version.outputs.VERSION }}/'
+          responseCode: '200'
+          timeout: 60000
+          interval: 5000
+        
+      - name: final
+        run: echo "ok"
